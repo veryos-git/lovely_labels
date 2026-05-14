@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+
+# Saved-page recovery snapshot — kept locally, not pushed.
+/Lovely Labels — 3D Name Plate Generator.html
+/Lovely Labels — 3D Name Plate Generator_files/

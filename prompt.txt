@@ -1,0 +1,55 @@
+Build a web app that generates a customizable 3D "name plate" and exports it as STL.
+
+## Stack
+- **Server:** Deno (TypeScript). Serves the Vue SPA and any static assets. No DB. No auth.
+- **Client:** Vue 3 (Composition API, `<script setup>`) + Vite. three.js for 3D preview.
+- All mesh generation and STL export happens **in the browser** — the server is just a static host.
+
+## Core workflow
+1. User configures inputs (see below).
+2. App rasterizes text onto a 2D canvas → greyscale depth map (or uses an uploaded image).
+3. App builds a 3D mesh from the depth map: a flat base plate of configurable thickness, with the top surface displaced upward proportional to pixel brightness.
+4. User previews the mesh in 3D, then downloads as binary STL.
+
+## Inputs (with sensible defaults)
+- **Text** (string, default `"Name"`)
+- **Font family** (dropdown of common web-safe fonts + a few Google Fonts loaded at runtime)
+- **Font size** (mm, default 20)
+- **Plate width / height** (mm, default 80 × 30)
+- **Base thickness** (mm, default 3)
+- **Emboss height** (mm, default 1.5) — how far white pixels are raised above the base
+- **Vertex density** (vertices per mm, default **5**, range 1–20) — drives mesh resolution
+- **Upload custom depth map** (PNG/JPG, optional; replaces the text-rendered canvas)
+- **Debug toggle: show vertices** (renders points on the mesh surface for inspection)
+
+## Two live previews, side by side
+1. **2D canvas preview** — the actual greyscale depth map that will feed the mesh. Updates immediately on any input change. White = raised, black = base.
+2. **3D mesh preview** — three.js scene with OrbitControls, basic lighting, and a ground grid. Re-meshes when inputs change (debounced ~150ms). Shows vertex count somewhere in the UI.
+
+## Mesh algorithm (be precise here)
+- Sample the depth map on a regular grid where grid spacing = `1 / vertexDensity` mm.
+- For a plate of W × H mm at density D, the top surface has `(W·D + 1) × (H·D + 1)` vertices.
+- Each top vertex's Z = `baseThickness + (pixelBrightness / 255) * embossHeight`.
+- Build the bottom surface as a flat rectangle at Z=0 (can be just 2 triangles).
+- Stitch the four side walls between top edge and bottom edge.
+- Output a single closed manifold mesh. Use `THREE.BufferGeometry` and export with three.js's `STLExporter` (binary mode).
+
+## UI
+- Left column: input controls (grouped: Text, Plate, Mesh, Debug).
+- Right side: stacked 2D canvas preview on top, 3D preview below (or side-by-side on wide screens).
+- Bottom: "Download STL" button. Filename = `<text>.stl`, sanitized.
+- Show live stats: depth map resolution (px), mesh vertex count, mesh triangle count.
+
+## Deliverables
+- `deno.json` with tasks: `dev` (Vite dev server proxied through Deno, or Deno serving Vite's dev output), `build`, `serve` (Deno serves built static files).
+- `server.ts` — minimal Deno static file server.
+- `client/` — Vue + Vite project.
+- README with run instructions.
+
+## Non-goals (do not build)
+- User accounts, persistence, history.
+- Server-side mesh generation.
+- Complex geometry beyond heightmap displacement.
+- Mobile-optimized UI (desktop-first is fine).
+
+Write idiomatic, readable code. Prefer small composables over a monolithic component. No comments explaining what the code does — only comments where the *why* is non-obvious (e.g., the side-wall stitching order).
