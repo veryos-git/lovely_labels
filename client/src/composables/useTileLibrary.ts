@@ -1,6 +1,11 @@
 import { ref } from "vue";
 import type { TileManifestEntry } from "../types";
 
+// Must stay in sync with TILE_WIDTH_BUCKETS in server.ts. The client snaps
+// the required width up to the nearest bucket so we don't refetch on every
+// small frame tweak; the server can only render at one of these widths.
+export const TILE_WIDTH_BUCKETS = [128, 256, 512, 1024, 2048];
+
 const manifest = ref<TileManifestEntry[]>([]);
 const loaded = ref(false);
 const error = ref<string | null>(null);
@@ -58,12 +63,23 @@ function computeTileContentRange(img: HTMLImageElement): TileContentRange {
   return { vMin, vMax, srcY: r0, srcH: r1 - r0 + 1, full: false };
 }
 
+// Content-range depends on actual texels, but for downscaled copies of the same
+// tile the relative top/bottom crop is essentially identical, so we key by id
+// only and amortise the costly readback across resolution changes.
 export function getTileContentRange(img: HTMLImageElement, id: string): TileContentRange {
   const cached = contentRangeCache.get(id);
   if (cached) return cached;
   const result = computeTileContentRange(img);
   contentRangeCache.set(id, result);
   return result;
+}
+
+export function tileBucketFor(widthPx: number): number {
+  const clamped = Math.max(1, Math.ceil(widthPx));
+  for (const b of TILE_WIDTH_BUCKETS) {
+    if (b >= clamped) return b;
+  }
+  return TILE_WIDTH_BUCKETS[TILE_WIDTH_BUCKETS.length - 1];
 }
 
 async function loadManifest(): Promise<void> {
@@ -79,19 +95,22 @@ async function loadManifest(): Promise<void> {
   }
 }
 
-export function loadTileImage(id: string): Promise<HTMLImageElement> {
+export function loadTileImage(id: string, widthPx: number): Promise<HTMLImageElement> {
   const entry = manifest.value.find((t) => t.id === id);
   if (!entry) return Promise.reject(new Error(`unknown tile: ${id}`));
-  const cached = imageCache.get(id);
+  const cap = entry.maxWidth ?? TILE_WIDTH_BUCKETS[TILE_WIDTH_BUCKETS.length - 1];
+  const bucket = Math.min(cap, tileBucketFor(widthPx));
+  const key = `${id}@${bucket}`;
+  const cached = imageCache.get(key);
   if (cached) return cached;
   const p = new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`failed to load tile ${id}`));
-    img.src = `/tiles/${entry.file}`;
+    img.onerror = () => reject(new Error(`failed to load tile ${id}@${bucket}`));
+    img.src = `/api/tile/${encodeURIComponent(id)}?width=${bucket}`;
   });
-  imageCache.set(id, p);
+  imageCache.set(key, p);
   return p;
 }
 

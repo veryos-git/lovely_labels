@@ -25,15 +25,16 @@ Drop `.ttf` or `.otf` files anywhere under `fonts/` (subdirectories OK). The ser
 
 ## Tile assets
 
-The decorative frame samples horizontally-seamless greyscale tiles from `client/public/tiles/`, listed in `client/public/tiles/manifest.json`. Drop source `.tif` files into `horizontal_tiles/` and run:
+The decorative frame samples horizontally-seamless greyscale tiles. Drop source `.tif` files into `tiffs/` (or `horizontal_tiles/` for older checkouts) and run:
 
 ```bash
 deno task build-tiles    # requires `magick` (ImageMagick) on PATH
 ```
 
-This regenerates the PNG copies, 128 px thumbnails, and the manifest.
+The build emits two things:
 
-> **Recovered note:** the current `client/public/tiles/` contents are 128 px placeholders bootstrapped from a saved-page snapshot. Restore the original `horizontal_tiles/*.tif` source artwork and re-run `deno task build-tiles` to get full-resolution 1024 px tiles back.
+- `tile_masters/<id>.png` — 2048 px server-only greyscale masters. **Not shipped to the client.** Resized copies are served on demand via `GET /api/tile/<id>?width=<bucket>`, where `<bucket>` is one of `128, 256, 512, 1024, 2048`. The client snaps the bucket up from the resolution it actually needs for the current `tileScaleMm × vertexDensity`.
+- `client/public/tiles/<id>.thumb.png` — ≤64 px thumbnails used by the tile picker grid, plus `manifest.json` listing every tile.
 
 ## Reference object
 

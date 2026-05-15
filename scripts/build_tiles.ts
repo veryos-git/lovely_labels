@@ -1,33 +1,51 @@
 /**
- * Convert horizontal_tiles/*.tif → client/public/tiles/*.png (+ thumbnails)
- * and write client/public/tiles/manifest.json so the client can list them
- * without a hardcoded list.
+ * Convert tiffs/*.tif → tile_masters/*.png (server-only, full-resolution)
+ *                    + client/public/tiles/*.thumb.png (≤64 px, shipped)
+ * and write client/public/tiles/manifest.json so the client can list them.
  *
- * Why ImageMagick subprocess: browsers can't read TIFF, and the source tiles
- * are 4096px 16-bit greyscale. We downscale to 1024px (plenty for the ring
- * strip resampling) and 128px thumbs to keep the asset payload sane.
+ * Why two output dirs: the 4096 px source TIFs are licensed artwork that we
+ * don't want to ship to the browser. The server keeps a 2048 px greyscale
+ * master and serves resolution-bucketed copies on demand via /api/tile.
+ * The client only receives thumbnails.
+ *
+ * Falls back to scanning horizontal_tiles/ if tiffs/ is absent so older
+ * checkouts keep working.
  */
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const SRC_DIR = `${ROOT}horizontal_tiles`;
-const OUT_DIR = `${ROOT}client/public/tiles`;
-const FULL_WIDTH = 1024;
-const THUMB_WIDTH = 128;
+const CANDIDATE_SRC_DIRS = [`${ROOT}tiffs`, `${ROOT}horizontal_tiles`];
+const MASTERS_DIR = `${ROOT}tile_masters`;
+const THUMBS_DIR = `${ROOT}client/public/tiles`;
+const MASTER_WIDTH = 2048;
+const THUMB_MAX = 64;
 
 interface ManifestEntry {
   id: string;
-  file: string;
   thumb: string;
-  width: number;
-  height: number;
+  naturalWidth: number;
+  naturalHeight: number;
+  maxWidth: number;
 }
 
 async function ensureDir(path: string): Promise<void> {
   await Deno.mkdir(path, { recursive: true });
 }
 
+async function dirExists(path: string): Promise<boolean> {
+  try {
+    const stat = await Deno.stat(path);
+    return stat.isDirectory;
+  } catch {
+    return false;
+  }
+}
+
 async function runMagick(args: string[]): Promise<void> {
-  const cmd = new Deno.Command("magick", { args, stderr: "piped", stdout: "piped" });
+  const cmd = new Deno.Command("magick", {
+    args,
+    stderr: "piped",
+    stdout: "piped",
+  });
   const { code, stderr } = await cmd.output();
   if (code !== 0) {
     const msg = new TextDecoder().decode(stderr);
@@ -37,7 +55,7 @@ async function runMagick(args: string[]): Promise<void> {
 
 async function identifyDims(path: string): Promise<{ w: number; h: number }> {
   const cmd = new Deno.Command("magick", {
-    args: ["identify", "-format", "%w %h", path],
+    args: ["identify", "-format", "%w %h", `${path}[0]`],
     stdout: "piped",
     stderr: "piped",
   });
@@ -45,7 +63,9 @@ async function identifyDims(path: string): Promise<{ w: number; h: number }> {
   if (code !== 0) {
     throw new Error(`identify failed: ${new TextDecoder().decode(stderr)}`);
   }
-  const [w, h] = new TextDecoder().decode(stdout).trim().split(/\s+/).map(Number);
+  const [w, h] = new TextDecoder().decode(stdout).trim().split(/\s+/).map(
+    Number,
+  );
   return { w, h };
 }
 
@@ -57,65 +77,98 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-async function main(): Promise<void> {
-  await ensureDir(OUT_DIR);
-
-  const entries: ManifestEntry[] = [];
-  const files: string[] = [];
+async function removeStaleFulls(): Promise<void> {
+  // The legacy pipeline wrote <id>.png next to <id>.thumb.png into the client
+  // bundle. Those are the high-res tiles we no longer want to ship — drop them
+  // so subsequent builds don't leave bundled copies behind.
   try {
-    for await (const entry of Deno.readDir(SRC_DIR)) {
-      if (entry.isFile && /\.tiff?$/i.test(entry.name)) files.push(entry.name);
+    for await (const e of Deno.readDir(THUMBS_DIR)) {
+      if (!e.isFile) continue;
+      if (e.name.endsWith(".thumb.png")) continue;
+      if (!e.name.endsWith(".png")) continue;
+      await Deno.remove(`${THUMBS_DIR}/${e.name}`).catch(() => {});
     }
-  } catch (e) {
-    console.warn(`Could not read ${SRC_DIR}: ${(e as Error).message}`);
+  } catch {
+    // dir may not exist yet — ensureDir below will create it.
+  }
+}
+
+async function findSrcDir(): Promise<string | null> {
+  for (const d of CANDIDATE_SRC_DIRS) {
+    if (await dirExists(d)) return d;
+  }
+  return null;
+}
+
+async function main(): Promise<void> {
+  const srcDir = await findSrcDir();
+  if (!srcDir) {
+    console.warn(
+      `No source dir found (tried ${CANDIDATE_SRC_DIRS.join(", ")})`,
+    );
+    return;
+  }
+  console.log(`Source: ${srcDir}`);
+
+  await ensureDir(MASTERS_DIR);
+  await ensureDir(THUMBS_DIR);
+  await removeStaleFulls();
+
+  const files: string[] = [];
+  for await (const entry of Deno.readDir(srcDir)) {
+    if (entry.isFile && /\.tiff?$/i.test(entry.name)) files.push(entry.name);
   }
   files.sort();
 
   if (files.length === 0) {
-    console.warn(`No .tif files in ${SRC_DIR}`);
+    console.warn(`No .tif files in ${srcDir}`);
   }
 
+  const entries: ManifestEntry[] = [];
   let i = 0;
   for (const name of files) {
     i++;
     const id = slugify(name);
-    const srcPath = `${SRC_DIR}/${name}`;
-    const fullName = `${id}.png`;
-    const thumbName = `${id}.thumb.png`;
-    const fullPath = `${OUT_DIR}/${fullName}`;
-    const thumbPath = `${OUT_DIR}/${thumbName}`;
+    const srcPath = `${srcDir}/${name}`;
+    const masterPath = `${MASTERS_DIR}/${id}.png`;
+    const thumbPath = `${THUMBS_DIR}/${id}.thumb.png`;
 
-    console.log(`[${i}/${files.length}] ${name} → ${fullName}`);
+    console.log(`[${i}/${files.length}] ${name} → ${id}`);
 
     await runMagick([
-      // Some TIFs carry an extra frame (mask or thumbnail) which makes magick
-      // emit "-0.png" and "-1.png" instead of the requested filename.
       `${srcPath}[0]`,
-      "-colorspace", "Gray",
-      "-depth", "8",
-      "-resize", `${FULL_WIDTH}x`,
+      "-colorspace",
+      "Gray",
+      "-depth",
+      "8",
+      "-resize",
+      `${MASTER_WIDTH}x`,
       "-strip",
-      "PNG8:" + fullPath,
+      "PNG8:" + masterPath,
     ]);
     await runMagick([
-      fullPath,
-      "-resize", `${THUMB_WIDTH}x`,
+      masterPath,
+      "-resize",
+      `${THUMB_MAX}x${THUMB_MAX}`,
       "-strip",
       "PNG8:" + thumbPath,
     ]);
 
-    const dims = await identifyDims(fullPath);
+    const masterDims = await identifyDims(masterPath);
     entries.push({
       id,
-      file: fullName,
-      thumb: thumbName,
-      width: dims.w,
-      height: dims.h,
+      thumb: `${id}.thumb.png`,
+      naturalWidth: masterDims.w,
+      naturalHeight: masterDims.h,
+      maxWidth: masterDims.w,
     });
   }
 
-  const manifestPath = `${OUT_DIR}/manifest.json`;
-  await Deno.writeTextFile(manifestPath, JSON.stringify({ tiles: entries }, null, 2));
+  const manifestPath = `${THUMBS_DIR}/manifest.json`;
+  await Deno.writeTextFile(
+    manifestPath,
+    JSON.stringify({ tiles: entries }, null, 2),
+  );
   console.log(`Wrote ${entries.length} tile(s) to ${manifestPath}`);
 }
 

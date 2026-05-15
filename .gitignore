@@ -14,3 +14,7 @@ dist/
 /fonts/**
 !/fonts/.gitkeep
 
+# Server-only tile masters: derived from tiffs/ by `deno task build-tiles`.
+# Resized copies are served on demand via /api/tile.
+/tile_masters/
+

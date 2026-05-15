@@ -61,10 +61,12 @@ export interface FramePlanSummary {
 
 export interface TileManifestEntry {
   id: string;
-  file: string;
   thumb: string;
-  width: number;
-  height: number;
+  naturalWidth: number;
+  naturalHeight: number;
+  // Largest width the server will return from /api/tile?width=… for this tile.
+  // Required widths above this are clamped client-side.
+  maxWidth: number;
 }
 export const FONT_OPTIONS = [
   // Sans-serif — Regular

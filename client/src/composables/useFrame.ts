@@ -30,7 +30,7 @@ export interface RectPlan {
 export type FramePlan = RingPlan | RectPlan;
 
 const TWO_PI = Math.PI * 2;
-const STRIP_SUPERSAMPLE = 3;
+export const STRIP_SUPERSAMPLE = 3;
 
 function rectPerimeter(W: number, H: number, r: number, T: number): number {
   // Centerline rect: (W-T) × (H-T) outer extent, corner radius rc = r - T/2.

@@ -19,7 +19,7 @@ import {
   useServerFonts,
 } from "./composables/useServerFonts";
 import { GLDepthRenderer } from "./composables/useGLDepthRenderer";
-import { summarizePlan } from "./composables/useFrame";
+import { STRIP_SUPERSAMPLE, summarizePlan } from "./composables/useFrame";
 import {
   applyLayout,
   deriveLayout,
@@ -98,8 +98,14 @@ async function getTileImage(): Promise<{ image: HTMLImageElement; id: string } |
     config.frame.tileId = id;
   }
   if (!id) return null;
+  // One tile period spans tileScaleMm of the strip, which we sample at up to
+  // vertexDensity × STRIP_SUPERSAMPLE pixels/mm — match the master resolution
+  // to that so neither the GL composite nor the CPU strip preview undersamples.
+  const requiredWidthPx = Math.ceil(
+    Math.max(1, config.frame.tileScaleMm) * config.vertexDensity * STRIP_SUPERSAMPLE,
+  );
   try {
-    const image = await loadTileImage(id);
+    const image = await loadTileImage(id, requiredWidthPx);
     return { image, id };
   } catch (e) {
     console.warn("tile load failed", e);

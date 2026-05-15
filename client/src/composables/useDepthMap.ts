@@ -186,7 +186,7 @@ function renderTextCanvas(
 export function buildDepthMap(
   cfg: PlateConfig,
   tileImage: HTMLImageElement | null,
-  tileKey: string | null,
+  tileId: string | null,
   renderer: GLDepthRenderer,
   serverTextImage: HTMLImageElement | null = null,
 ): DepthMap {
@@ -199,9 +199,12 @@ export function buildDepthMap(
   const textPxH = Math.max(1, Math.round(cfg.heightMm * textPxPerMm));
   const text = renderTextCanvas(cfg, usePlan, textPxW, textPxH, textPxPerMm, serverTextImage);
 
-  const contentRange = usePlan && tileImage && tileKey
-    ? getTileContentRange(tileImage, tileKey)
+  // Content-range only depends on tile identity, not resolution. The GL key
+  // bakes in resolution so the renderer re-uploads when we switch buckets.
+  const contentRange = usePlan && tileImage && tileId
+    ? getTileContentRange(tileImage, tileId)
     : null;
+  const tileKey = tileImage && tileId ? `${tileId}@${tileImage.naturalWidth}` : null;
 
   const result = renderer.render({
     textCanvas: text.canvas,
