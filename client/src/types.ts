@@ -1,3 +1,4 @@
+//license GPL Jonas Immanuel Frey
 export type FrameShape = "none" | "ring" | "roundedRect";
 
 export type SnapDimension = "tileScale" | "cornerRadius" | "width" | "height";
@@ -69,25 +70,28 @@ export interface TileManifestEntry {
   maxWidth: number;
 }
 export const FONT_OPTIONS = [
-  // Sans-serif — Regular
+  // System fonts
   { family: "Arial, sans-serif", label: "Arial", google: null },
-  { family: "Helvetica, Arial, sans-serif", label: "Helvetica", google: null },
-  { family: '"Inter", sans-serif', label: "Inter (Google)", google: "Inter:wght@400" },
-
-  // Sans-serif — Bold
-  { family: "Arial, sans-serif", label: "Arial Bold", google: null, weight: 700 },
-  { family: "Helvetica, Arial, sans-serif", label: "Helvetica Bold", google: null, weight: 700 },
-  { family: '"Inter", sans-serif', label: "Inter Bold (Google)", google: "Inter:wght@700", weight: 700 },
-
-  // Serif — Regular
-  { family: "Georgia, serif", label: "Georgia", google: null },
   { family: '"Times New Roman", serif', label: "Times New Roman", google: null },
-  { family: '"Merriweather", serif', label: "Merriweather (Google)", google: "Merriweather:wght@400" },
 
-  // Serif — Bold
-  { family: "Georgia, serif", label: "Georgia Bold", google: null, weight: 700 },
-  { family: '"Times New Roman", serif', label: "Times New Roman Bold", google: null, weight: 700 },
-  { family: '"Merriweather", serif', label: "Merriweather Bold (Google)", google: "Merriweather:wght@700", weight: 700 },
+  // Sans-serif — Google
+  { family: '"Inter", sans-serif', label: "Inter", google: "Inter:wght@400" },
+  { family: '"Roboto", sans-serif', label: "Roboto", google: "Roboto:wght@400" },
+  { family: '"Open Sans", sans-serif', label: "Open Sans", google: "Open Sans:wght@400" },
+  { family: '"Lato", sans-serif', label: "Lato", google: "Lato:wght@400" },
+  { family: '"Source Sans 3", sans-serif', label: "Source Sans 3", google: "Source Sans 3:wght@400" },
+  { family: '"Fira Sans", sans-serif', label: "Fira Sans", google: "Fira Sans:wght@400" },
+  { family: '"Public Sans", sans-serif', label: "Public Sans", google: "Public Sans:wght@400" },
+  { family: '"IBM Plex Sans", sans-serif', label: "IBM Plex Sans", google: "IBM Plex Sans:wght@400" },
+
+  // Serif — Google
+  { family: '"Merriweather", serif', label: "Merriweather", google: "Merriweather:wght@400" },
+  { family: '"IBM Plex Serif", serif', label: "IBM Plex Serif", google: "IBM Plex Serif:wght@400" },
+
+  // Monospace — Google
+  { family: '"Fira Code", monospace', label: "Fira Code", google: "Fira Code:wght@400" },
+  { family: '"JetBrains Mono", monospace', label: "JetBrains Mono", google: "JetBrains Mono:wght@400" },
+  { family: '"IBM Plex Mono", monospace', label: "IBM Plex Mono", google: "IBM Plex Mono:wght@400" },
 ] as const;
 
 export type FontOption = (typeof FONT_OPTIONS)[number];
