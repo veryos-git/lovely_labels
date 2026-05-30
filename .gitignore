@@ -4,6 +4,11 @@ dist/
 *.log
 .DS_Store
 
+# Local runtime config: a copy of .env.example, may hold secrets. Never commit.
+# The committed template (.env.example) stays tracked.
+.env
+.env.local
+
 # Saved-page recovery snapshot — kept locally, not pushed.
 /Lovely Labels — 3D Name Plate Generator.html
 /Lovely Labels — 3D Name Plate Generator_files/
