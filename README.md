@@ -87,7 +87,7 @@ Dieser Abschnitt entspricht den sechs Produktionsreife-Merkmalen aus dem DEP-Auf
 |---|---|
 | **Containerisiert** | [`Dockerfile`](Dockerfile) (Multi-Stage, Non-Root-User `deno`, gepinnte Versionen) + [`docker-compose.yml`](docker-compose.yml) für den lokalen One-Liner. |
 | **Automatisiert** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) → fmt-Check → Typecheck → Vite-Build → Docker-Build → Container-Smoke-Test → Deploy-Hook. Render zieht den letzten `main`-Commit. |
-| **Konfigurierbar** | Env-Vars (`PORT`, `MAGICK_BIN`). Beispiele in [`.env.example`](.env.example). Produktion: definiert in [`render.yaml`](render.yaml). Secrets liegen ausschliesslich in GitHub-Actions-Secrets bzw. im Render-Dashboard, nie im Code. |
+| **Konfigurierbar** | Env-Vars (`PORT`, `MAGICK_BIN`). Eine einzige [`.env`](.env.example) speist sowohl die lokalen `deno task`s (`--env-file`) als auch `docker compose` (Interpolation mit Defaults). Produktion: definiert in [`render.yaml`](render.yaml). Secrets liegen ausschliesslich in GitHub-Actions-Secrets bzw. im Render-Dashboard, nie im Code. |
 | **Erreichbar** | Stabil unter [https://lovely-labels.onrender.com](https://lovely-labels.onrender.com) mit Cloudflare-HTTPS via Render. |
 | **Überwachbar** | Strukturierte JSON-Logs auf stdout (12-Factor); Render's Log-Viewer fängt sie ein. Healthcheck-Endpoint `/api/health` ist in `render.yaml` als `healthCheckPath` registriert und auch Teil des Compose-Healthchecks. |
 | **Dokumentiert** | Dieses README + [`screencast_skript.md`](screencast_skript.md). |
@@ -145,9 +145,10 @@ deno task serve           # API-Server :8080 (lädt .env via --env-file)
 # Vite proxied /api/* automatisch
 ```
 
-> Die `deno task`-Befehle laden `.env` per `--env-file`. Fehlt die Datei, läuft
-> alles mit den Defaults weiter (Deno gibt nur eine Warnung aus). Docker/Render
-> nutzen `.env` nicht — dort kommen die Variablen aus Compose bzw. `render.yaml`.
+> Die `deno task`-Befehle laden `.env` per `--env-file`, und `docker compose`
+> liest dieselbe `.env` automatisch für die `${...}`-Werte. Fehlt die Datei,
+> greifen überall die Defaults (Deno warnt nur, Compose nutzt `:-`-Fallbacks).
+> Render liest `.env` nicht — dort kommen die Variablen aus `render.yaml`.
 
 **Eigene Assets:**
 
