@@ -28,15 +28,39 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Build client (vue-tsc + vite)
-        working-directory: client
-        run: npm run build
+      - name: Lint server (deno fmt --check)
+        run: deno fmt --check
 
       - name: Type-check server
         run: deno check server.ts
 
+      - name: Build client (vue-tsc + vite)
+        working-directory: client
+        run: npm run build
+
       - name: Build Docker image
         run: docker build -t lovely-labels:ci .
+
+      - name: Smoke-test container (boot + /api/health + /api/fonts)
+        run: |
+          docker run -d --name lovely-labels-smoke -p 18080:8080 lovely-labels:ci
+          # Poll the health endpoint until it answers or we hit the timeout.
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:18080/api/health > /dev/null; then
+              echo "container healthy after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "container failed to become healthy" >&2
+              docker logs lovely-labels-smoke
+              docker rm -f lovely-labels-smoke
+              exit 1
+            fi
+            sleep 1
+          done
+          # Sanity-check a content endpoint too — proves the assets shipped.
+          curl -fsS http://localhost:18080/api/fonts | grep -q CelticsModern
+          docker rm -f lovely-labels-smoke
 
   deploy:
     needs: build

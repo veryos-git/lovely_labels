@@ -21,15 +21,18 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY deno.json server.ts ./
-COPY fonts/ ./fonts/
-COPY tile_masters/ ./tile_masters/
-COPY --from=client-build /app/client/dist ./client/dist
+# The denoland/deno base image ships a non-root `deno` user (uid 1993).
+# Everything we COPY is chowned to it so the runtime stage never needs root.
+COPY --chown=deno:deno deno.json server.ts ./
+COPY --chown=deno:deno fonts/ ./fonts/
+COPY --chown=deno:deno tile_masters/ ./tile_masters/
+COPY --chown=deno:deno --from=client-build /app/client/dist ./client/dist
 
 ENV PORT=8080
 ENV MAGICK_BIN=magick
 EXPOSE 8080
 
+USER deno
 RUN deno cache server.ts
 
 CMD ["deno", "run", "--allow-net", "--allow-read", "--allow-env", "--allow-run=magick", "server.ts"]
